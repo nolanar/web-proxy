@@ -9,7 +9,15 @@ const util = require('util');
 const HOSTNAME = '127.0.0.1';
 const PORT = 3000;
 
-const cache_dirname = 'cache';
+const cachedir = 'cache';
+const cachepath = __dirname + '/' + cachedir;
+
+//// initialisation ////
+
+// create cache directory if it does not exist
+if (!fs.existsSync(cachepath)){
+    fs.mkdirSync(cachepath);
+}
 
 //// Proxy Server ////
 
@@ -136,7 +144,7 @@ function logRequest (req) {
 }
 
 
-//// Blacklisting ////
+//// Blacklist ////
 
 var blocked_hosts = new Set();
 var blocked_urls = new Set();
@@ -177,12 +185,12 @@ function printBlockedUrls() {
 	for (let item of blocked_urls) console.log(item);
 }
 
-//// Caching ////
+//// Cache ////
 
 var tag_cache = new Map();
 
 function isCached(url) {
-	return tag_cache.has(urlId(url));
+	return tag_cache.has(url);
 }
 
 function urlId(url) {
@@ -190,11 +198,11 @@ function urlId(url) {
 }
 
 function cacheHead(url) {
-	return __dirname + '/' + cache_dirname + '/' + urlId(url) + '-h';
+	return __dirname + '/' + cachedir + '/' + urlId(url) + '-h';
 }
 
 function cacheContent(url) {
-	return __dirname + '/' + cache_dirname + '/' + urlId(url) + '-c';
+	return __dirname + '/' + cachedir + '/' + urlId(url) + '-c';
 }
 
 function addTag(url, headers) {
@@ -207,7 +215,7 @@ function addTag(url, headers) {
 	}
 
 	if (Object.keys(tag).length !== 0) {
-		tag_cache.set(urlId(url), tag);
+		tag_cache.set(url, tag);
 		return true;
 	}
 	return false;
@@ -215,6 +223,19 @@ function addTag(url, headers) {
 
 function getTag(url) {
 	return tag_cache.get(urlId(url));
+}
+
+function printCache() {
+	if (tag_cache.size === 0) console.log('empty');
+	for (let url of tag_cache.keys()) console.log(url);
+}
+
+function uncache(url) {
+	return tag_cache.delete(url);
+}
+
+function clearCache() {
+	tag_cache.clear();
 }
 
 //// utility functions ////
@@ -256,12 +277,28 @@ rl.on('line', (line) => {
 		else console.log(`invalid input: one argument expected`);
 		break;
 	case 'unblockurl':
-		if (input.length === 2) unblockUrl(input[1]);
+		if (input.length === 2 && !unblockUrl(input[1])) {
+			console.log("warning: no matching url found: nothing removed");
+		}
 		else console.log(`invalid input: one argument expected`);
 		break;
 	case 'unblockhost':
-		if (input.length === 2) unblockHost(input[1]);
+		if (input.length === 2 && !unblockHost(input[1])) {
+			console.log("warning: no matching hostname found: nothing removed");			
+		}
 		else console.log(`invalid input: one argument expected`);
+		break;
+	case 'cache':
+		printCache();
+		break;
+	case 'uncache':
+		if (input.length === 2 && !uncache(input[1])) {
+			console.log("warning: no matching url found: nothing removed");
+		}
+		else console.log(`invalid input: one argument expected`);
+		break;
+	case 'clearcache':
+		clearCache();
 		break;
 	default: 
 		console.log('invalid command');
@@ -274,7 +311,7 @@ rl.on('line', (line) => {
     return process.exit(1);
 });
 
-// modify console.log so that output does not spil into input
+// modify console.log so that output does not spill onto input
 var log = console.log;
 console.log = function() {
     rl.output.write('\x1b[2K\r');
