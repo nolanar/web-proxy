@@ -11,6 +11,10 @@ const PORT = 3000;
 
 const cachedir = 'cache';
 const cachepath = __dirname + '/' + cachedir;
+var tag_cache = new Map();
+
+var blocked_hosts = new Set();
+var blocked_urls = new Set();
 
 //// initialisation ////
 
@@ -64,7 +68,7 @@ proxy.on('request', (req, res) => {
 		// then respond with '200 OK' and the cached page
 		if (getCached && proxy_res.statusCode === 304) {
 			console.log("serving from proxy cache");
-			// read cached headers
+			// read cached headers from file
 			var headers;
 			fs.readFile(cacheHead(req.url), (err, data) => {
 				if (err) throw err;
@@ -81,6 +85,7 @@ proxy.on('request', (req, res) => {
 		} else {
 			console.log("not serving from proxy cache");
 			// if response is '200 OK' then cache the page
+			// caching is done only if 'etag' or 'last-modified' exists
 			if (proxy_res.statusCode === 200) {
 				if (addTag(req.url, proxy_res.headers)) {
 					console.log("caching page");
@@ -98,7 +103,7 @@ proxy.on('request', (req, res) => {
 					proxy_res.pipe(cached_body);
 				}
 			}
-
+			// pipe the received result to the client
 	  		res.writeHead(proxy_res.statusCode, proxy_res.headers);
 			proxy_res.pipe(res);
 		}
@@ -127,7 +132,7 @@ proxy.on('connect', (req, socket, head) => {
 	};
 	proxySocket.connect(options, () => {
 		socket.write(`HTTP/${req.httpVersion} 200 Connection established\r\n\r\n`); // connection success response
-		console.log("connection established");
+		console.log("connection established:", req.url);
 		proxySocket.write(head);
 		proxySocket.pipe(socket).pipe(proxySocket);
 	}).on('error', (err) => {
@@ -145,9 +150,6 @@ function logRequest (req) {
 
 
 //// Blacklist ////
-
-var blocked_hosts = new Set();
-var blocked_urls = new Set();
 
 function urlIsBlocked(req) {
 	return blocked_hosts.has(req.headers['host'])
@@ -186,8 +188,6 @@ function printBlockedUrls() {
 }
 
 //// Cache ////
-
-var tag_cache = new Map();
 
 function isCached(url) {
 	return tag_cache.has(url);
@@ -270,23 +270,23 @@ rl.on('line', (line) => {
 		break;
 	case 'blockurl':
 		if (input.length === 2) blockUrl(input[1]);
-		else console.log(`invalid input: one argument expected`);
+		else console.log("invalid input: one argument expected");
 		break;
 	case 'blockhost':
 		if (input.length === 2) blockHost(input[1]);
-		else console.log(`invalid input: one argument expected`);
+		else console.log("invalid input: one argument expected");
 		break;
 	case 'unblockurl':
 		if (input.length === 2 && !unblockUrl(input[1])) {
 			console.log("warning: no matching url found: nothing removed");
 		}
-		else console.log(`invalid input: one argument expected`);
+		else console.log("invalid input: one argument expected");
 		break;
 	case 'unblockhost':
 		if (input.length === 2 && !unblockHost(input[1])) {
 			console.log("warning: no matching hostname found: nothing removed");			
 		}
-		else console.log(`invalid input: one argument expected`);
+		else console.log("invalid input: one argument expected");
 		break;
 	case 'cache':
 		printCache();
@@ -295,7 +295,7 @@ rl.on('line', (line) => {
 		if (input.length === 2 && !uncache(input[1])) {
 			console.log("warning: no matching url found: nothing removed");
 		}
-		else console.log(`invalid input: one argument expected`);
+		else console.log("invalid input: one argument expected");
 		break;
 	case 'clearcache':
 		clearCache();
